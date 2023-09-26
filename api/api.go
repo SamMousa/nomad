@@ -288,16 +288,25 @@ func (t *TLSConfig) Copy() *TLSConfig {
 	return nt
 }
 
+type unixRoundTripper struct {
+	unixTransport http.Transport
+}
+
+func (t *unixRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	return t.unixTransport.RoundTrip(req)
+}
+
 func defaultHttpClient() *http.Client {
 	httpClient := cleanhttp.DefaultPooledClient()
 	transport := httpClient.Transport.(*http.Transport)
 
-	unixTransport := httpClient.Transport.(*http.Transport)
-	unixTransport.DialContext = func(_ context.Context, network, address string) (net.Conn, error) {
-		return net.Dial("unix", address)
-	}
-
-	transport.RegisterProtocol("unix", unixTransport)
+	transport.RegisterProtocol("unix", &unixRoundTripper{
+		unixTransport: http.Transport{
+			DialContext: func(_ context.Context, network, address string) (net.Conn, error) {
+				return net.Dial("unix", address)
+			},
+		},
+	})
 
 	transport.TLSHandshakeTimeout = 10 * time.Second
 	transport.TLSClientConfig = &tls.Config{
